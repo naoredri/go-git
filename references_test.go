@@ -316,7 +316,7 @@ func (s *ReferencesSuite) TestObjectNotFoundError(c *C) {
 	commit, err := r.CommitObject(h1)
 	c.Assert(err, IsNil)
 
-	_, err = references(commit, "LICENSE")
+	_, err = references(commit, "LICENSE", 0)
 	c.Assert(err, Equals, plumbing.ErrObjectNotFound)
 }
 
@@ -327,7 +327,7 @@ func (s *ReferencesSuite) TestRevList(c *C) {
 		commit, err := r.CommitObject(plumbing.NewHash(t.commit))
 		c.Assert(err, IsNil)
 
-		revs, err := references(commit, t.path)
+		revs, err := references(commit, t.path, 0)
 		c.Assert(err, IsNil)
 		c.Assert(len(revs), Equals, len(t.revs))
 

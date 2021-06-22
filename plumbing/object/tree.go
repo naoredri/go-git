@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
@@ -27,6 +28,8 @@ var (
 	ErrFileNotFound      = errors.New("file not found")
 	ErrDirectoryNotFound = errors.New("directory not found")
 	ErrEntryNotFound     = errors.New("entry not found")
+
+	treeMap sync.Map
 )
 
 // Tree is basically like a directory - it references a bunch of other trees
@@ -36,18 +39,30 @@ type Tree struct {
 	Hash    plumbing.Hash
 
 	s storer.EncodedObjectStorer
-	m map[string]*TreeEntry
-	t map[string]*Tree // tree path cache
+	m *sync.Map
+	t sync.Map // tree path cache
 }
 
 // GetTree gets a tree from an object storer and decodes it.
 func GetTree(s storer.EncodedObjectStorer, h plumbing.Hash) (*Tree, error) {
+	// using tree memorization since DecodeTree is expensive operation
+	if tree, ok := treeMap.Load(h); ok {
+		return tree.(*Tree), nil
+	}
+
 	o, err := s.EncodedObject(plumbing.TreeObject, h)
 	if err != nil {
 		return nil, err
 	}
 
-	return DecodeTree(s, o)
+	tree, err := DecodeTree(s, o)
+	if err != nil {
+		return nil, err
+	}
+
+	// return decoded tree after storing in map
+	treeMap.Store(h, tree)
+	return tree, nil
 }
 
 // DecodeTree decodes an encoded object into a *Tree and associates it to the
@@ -126,10 +141,6 @@ func (t *Tree) TreeEntryFile(e *TreeEntry) (*File, error) {
 
 // FindEntry search a TreeEntry in this tree or any subtree.
 func (t *Tree) FindEntry(path string) (*TreeEntry, error) {
-	if t.t == nil {
-		t.t = make(map[string]*Tree)
-	}
-
 	pathParts := strings.Split(path, "/")
 	startingTree := t
 	pathCurrent := ""
@@ -138,9 +149,9 @@ func (t *Tree) FindEntry(path string) (*TreeEntry, error) {
 	for i := len(pathParts) - 1; i > 1; i-- {
 		path := filepath.Join(pathParts[:i]...)
 
-		tree, ok := t.t[path]
+		tree, ok := t.t.Load(path)
 		if ok {
-			startingTree = tree
+			startingTree = tree.(*Tree)
 			pathParts = pathParts[i:]
 			pathCurrent = path
 
@@ -156,7 +167,7 @@ func (t *Tree) FindEntry(path string) (*TreeEntry, error) {
 		}
 
 		pathCurrent = filepath.Join(pathCurrent, pathParts[0])
-		t.t[pathCurrent] = tree
+		t.t.Store(pathCurrent, tree)
 	}
 
 	return tree.entry(pathParts[0])
@@ -180,16 +191,17 @@ func (t *Tree) dir(baseName string) (*Tree, error) {
 }
 
 func (t *Tree) entry(baseName string) (*TreeEntry, error) {
+	// initialize tree map if needed
 	if t.m == nil {
 		t.buildMap()
 	}
 
-	entry, ok := t.m[baseName]
+	entry, ok := t.m.Load(baseName)
 	if !ok {
 		return nil, ErrEntryNotFound
 	}
 
-	return entry, nil
+	return entry.(*TreeEntry), nil
 }
 
 // Files returns a FileIter allowing to iterate over the Tree
@@ -297,9 +309,9 @@ func (t *Tree) Encode(o plumbing.EncodedObject) (err error) {
 }
 
 func (t *Tree) buildMap() {
-	t.m = make(map[string]*TreeEntry)
+	t.m = &sync.Map{}
 	for i := 0; i < len(t.Entries); i++ {
-		t.m[t.Entries[i].Name] = &t.Entries[i]
+		t.m.Store(t.Entries[i].Name, &t.Entries[i])
 	}
 }
 

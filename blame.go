@@ -26,7 +26,9 @@ type BlameResult struct {
 
 // Blame returns a BlameResult with the information about the last author of
 // each line from file `path` at commit `c`.
-func Blame(c *object.Commit, path string) (*BlameResult, error) {
+// maxRevDepth indicates the maximum revisions depth to traverse.
+// if maxRevDepth <= 0, the depth is unlimited (might have performance impact)
+func Blame(c *object.Commit, path string, maxRevDepth int) (*BlameResult, error) {
 	// The file to blame is identified by the input arguments:
 	// commit and path. commit is a Commit object obtained from a Repository. Path
 	// represents a path to a specific file contained into the repository.
@@ -65,9 +67,10 @@ func Blame(c *object.Commit, path string) (*BlameResult, error) {
 	b.path = path
 
 	// get all the file revisions
-	if err := b.fillRevs(); err != nil {
+	if err := b.fillRevs(maxRevDepth); err != nil {
 		return nil, err
 	}
+
 
 	// calculate the line tracking graph and fill in
 	// file contents in data.
@@ -161,10 +164,10 @@ type blame struct {
 }
 
 // calculate the history of a file "path", starting from commit "from", sorted by commit date.
-func (b *blame) fillRevs() error {
+func (b *blame) fillRevs(maxRevDepth int) error {
 	var err error
 
-	b.revs, err = references(b.fRev, b.path)
+	b.revs, err = references(b.fRev, b.path, maxRevDepth)
 	return err
 }
 
@@ -208,6 +211,9 @@ func (b *blame) fillGraphAndData() error {
 // sliceGraph returns a slice of commits (one per line) for a particular
 // revision of a file (0=first revision).
 func (b *blame) sliceGraph(i int) []*object.Commit {
+	if i == -1 {
+		println()
+	}
 	fVs := b.graph[i]
 	result := make([]*object.Commit, 0, len(fVs))
 	for _, v := range fVs {

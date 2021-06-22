@@ -1,6 +1,7 @@
 package git
 
 import (
+	"fmt"
 	"io"
 	"sort"
 
@@ -24,13 +25,17 @@ import (
 // - Cherry-picks are not detected unless there are no commits between them and
 // therefore can appear repeated in the list. (see git path-id for hints on how
 // to fix this).
-func references(c *object.Commit, path string) ([]*object.Commit, error) {
+func references(c *object.Commit, path string, maxRevDepth int) ([]*object.Commit, error) {
 	var result []*object.Commit
 	seen := make(map[plumbing.Hash]struct{})
-	if err := walkGraph(&result, &seen, c, path); err != nil {
+	if err := walkGraph(&result, &seen, c, path, 0 /* depth */, maxRevDepth); err != nil {
 		return nil, err
 	}
 
+	if len(result) == 0 {
+		return nil, fmt.Errorf("%s: no commits found, consider increasing maxRevDepth value", path)
+	}
+	
 	// TODO result should be returned without ordering
 	sortCommits(result)
 
@@ -64,7 +69,16 @@ func sortCommits(l []*object.Commit) {
 
 // Recursive traversal of the commit graph, generating a linear history of the
 // path.
-func walkGraph(result *[]*object.Commit, seen *map[plumbing.Hash]struct{}, current *object.Commit, path string) error {
+func walkGraph(result *[]*object.Commit, seen *map[plumbing.Hash]struct{}, current *object.Commit, path string, depth int, maxRevDepth int) error {
+	// in case current parent depth reached the max revisions depth, add current commit WITHOUT author details
+	// TODO: use more elegant solution which won't break the flow
+	if maxRevDepth > 0 && depth >= maxRevDepth {
+		emptyCommit := *current
+		emptyCommit.Author = object.Signature{}
+		*result = append(*result, &emptyCommit)
+		return nil
+	}
+	
 	// check and update seen
 	if _, ok := (*seen)[current.Hash]; ok {
 		return nil
@@ -100,12 +114,12 @@ func walkGraph(result *[]*object.Commit, seen *map[plumbing.Hash]struct{}, curre
 			*result = append(*result, current)
 		}
 		// in any case, walk the parent
-		return walkGraph(result, seen, parents[0], path)
+		return walkGraph(result, seen, parents[0], path, depth+1, maxRevDepth)
 	default: // more than one parent contains the path
 		// TODO: detect merges that had a conflict, because they must be
 		// included in the result here.
 		for _, p := range parents {
-			err := walkGraph(result, seen, p, path)
+			err := walkGraph(result, seen, p, path, depth+1, maxRevDepth)
 			if err != nil {
 				return err
 			}

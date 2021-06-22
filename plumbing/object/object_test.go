@@ -89,10 +89,11 @@ func (s *ObjectsSuite) TestParseTree(c *C) {
 	c.Assert(tree.Entries, HasLen, 8)
 
 	tree.buildMap()
-	c.Assert(tree.m, HasLen, 8)
-	c.Assert(tree.m[".gitignore"].Name, Equals, ".gitignore")
-	c.Assert(tree.m[".gitignore"].Mode, Equals, filemode.Regular)
-	c.Assert(tree.m[".gitignore"].Hash.String(), Equals, "32858aad3c383ed1ff0a0f9bdf231d54a00c9e88")
+	t, ok := tree.m.Load(".gitignore")
+	c.Assert(ok, Equals, true)
+	c.Assert(t.(*TreeEntry).Name, Equals, ".gitignore")
+	c.Assert(t.(*TreeEntry).Mode, Equals, filemode.Regular)
+	c.Assert(t.(*TreeEntry).Hash.String(), Equals, "32858aad3c383ed1ff0a0f9bdf231d54a00c9e88")
 
 	count := 0
 	iter := tree.Files()

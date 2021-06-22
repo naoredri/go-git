@@ -54,9 +54,9 @@ func (s *TreeSuite) TestType(c *C) {
 }
 
 func (s *TreeSuite) TestTree(c *C) {
-	expectedEntry, ok := s.Tree.m["vendor"]
+	expectedEntry, ok := s.Tree.m.Load("vendor")
 	c.Assert(ok, Equals, true)
-	expected := expectedEntry.Hash
+	expected := expectedEntry.(*TreeEntry).Hash
 
 	obtainedTree, err := s.Tree.Tree("vendor")
 	c.Assert(err, IsNil)
@@ -1615,7 +1615,7 @@ func (s *TreeSuite) TestTreeDecodeReadBug(c *C) {
 		},
 		Hash: plumbing.Hash{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0},
 		s:    (storer.EncodedObjectStorer)(nil),
-		m:    map[string]*TreeEntry(nil),
+		m:    nil,
 	}
 
 	var obtained Tree
