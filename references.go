@@ -33,7 +33,7 @@ func references(c *object.Commit, path string, maxRevDepth int) ([]*object.Commi
 	}
 
 	if len(result) == 0 {
-		return nil, fmt.Errorf("%s: no commits found, consider increasing maxRevDepth value", path)
+		return nil, fmt.Errorf("%s: no commits found, consider increasing max depth value", path)
 	}
 	
 	// TODO result should be returned without ordering
